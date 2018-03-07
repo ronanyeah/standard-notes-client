@@ -1,0 +1,30 @@
+{
+  "name": "standard-notes-client",
+  "version": "1.0.0",
+  "description": "https://standardnotes.org/",
+  "main": "./src/index.js",
+  "dependencies": {
+    "copy-webpack-plugin": "^4.5.0",
+    "elm-hot-loader": "^0.5.4",
+    "elm-webpack-loader": "git://github.com/elm-community/elm-webpack-loader.git#7d1c6d939ea5b8b8a8f2aa2eb497e7fba49e6c71",
+    "webpack": "^4.1.0",
+    "webpack-cli": "^2.0.10",
+    "webpack-dev-server": "^3.1.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "watch": "webpack-dev-server --hot",
+    "build": "webpack -p",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ronanyeah/standard-notes-client.git"
+  },
+  "author": "ronanyeah",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/ronanyeah/standard-notes-client/issues"
+  },
+  "homepage": "https://github.com/ronanyeah/standard-notes-client#readme"
+}
