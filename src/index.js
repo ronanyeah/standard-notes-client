@@ -9,6 +9,10 @@ if (window.navigator.serviceWorker) {
       const app = Elm.Main.embed(document.body, localStorage.getItem("DATA"));
 
       app.ports.saveAuth.subscribe(data => localStorage.setItem("DATA", data));
+
+      app.ports.clearAuth.subscribe(() => localStorage.removeItem("DATA"));
+
+      app.ports.log.subscribe(console.log);
     })
     .catch(alert);
 } else {

@@ -1,5 +1,10 @@
 const crypto = self.crypto.subtle;
 
+const splitItemKey = str => ({
+  itemEncryptionKey: str.substring(0, str.length / 2),
+  itemAuthKey: str.substring(str.length / 2)
+});
+
 const stringToBuffer1 = string =>
   // https://stackoverflow.com/questions/43131242/how-to-convert-a-hexademical-string-of-data-to-an-arraybuffer-in-javascript
   new Uint8Array(string.match(/[\da-f]{2}/gi).map(h => parseInt(h, 16)));
@@ -19,6 +24,29 @@ const arrayBufferToString = buffer =>
     (acc, val) => acc + String.fromCharCode(val),
     ""
   );
+
+const getBits = async () => {
+  const key = await crypto.importKey(
+    "raw",
+    self.crypto.getRandomValues(new Uint8Array(16)),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"]
+  );
+
+  const bits = await crypto.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: self.crypto.getRandomValues(new Uint8Array(16)),
+      iterations: 100000,
+      hash: { name: "SHA-512" }
+    },
+    key,
+    512
+  );
+
+  return arrayBufferToHexString(bits);
+};
 
 const stretchPassword = async (password, salt, cost) => {
   const key = await crypto.importKey(
@@ -56,7 +84,7 @@ const decryptString = async (str, authKey, encryptionKey) => {
       hash: { name: "SHA-256" }
     },
     false,
-    ["sign", "verify"]
+    ["verify"]
   );
 
   const eq = await crypto.verify(
@@ -69,7 +97,7 @@ const decryptString = async (str, authKey, encryptionKey) => {
   );
 
   if (!eq) {
-    return new Response(JSON.stringify("not equal!"), { status: 400 });
+    throw Error("not equal!");
   }
 
   const aes = await crypto.importKey(
@@ -79,7 +107,7 @@ const decryptString = async (str, authKey, encryptionKey) => {
       name: "AES-CBC"
     },
     false,
-    ["encrypt", "decrypt"]
+    ["decrypt"]
   );
 
   const res = await crypto.decrypt(
@@ -91,33 +119,118 @@ const decryptString = async (str, authKey, encryptionKey) => {
     stringToBuffer2(atob(cipherText))
   );
 
-  return new Response(JSON.stringify(arrayBufferToString(res)));
+  return arrayBufferToString(res);
+};
+
+const encryptString = async (data, uuid, authKey, encryptionKey) => {
+  const iv = self.crypto.getRandomValues(new Uint8Array(16));
+  const ivStr = arrayBufferToHexString(iv);
+
+  const aesKey = await crypto.importKey(
+    "raw",
+    stringToBuffer1(encryptionKey),
+    {
+      name: "AES-CBC"
+    },
+    false,
+    ["encrypt"]
+  );
+
+  const encryptedContent = await crypto.encrypt(
+    {
+      name: "AES-CBC",
+      iv
+    },
+    aesKey,
+    stringToBuffer2(data)
+  );
+
+  const contentCiphertext = btoa(arrayBufferToString(encryptedContent));
+  const ciphertextToHash = ["002", uuid, ivStr, contentCiphertext].join(":");
+
+  const hashKey = await crypto.importKey(
+    "raw",
+    stringToBuffer1(authKey),
+    {
+      name: "HMAC",
+      hash: { name: "SHA-256" }
+    },
+    false,
+    ["sign"]
+  );
+
+  const authHash = await crypto.sign(
+    {
+      name: "HMAC"
+    },
+    hashKey,
+    stringToBuffer2(ciphertextToHash)
+  );
+
+  return [
+    "002",
+    arrayBufferToHexString(authHash),
+    uuid,
+    ivStr,
+    contentCiphertext
+  ].join(":");
 };
 
 const handlers = async request => {
   const url = request.url.substring((self.location.origin + "/crypto").length);
 
   switch (url) {
+    case "/check": {
+      return new Response(JSON.stringify("OK"));
+    }
     case "/key": {
       const { password, salt, cost } = await request.json();
       const key = await stretchPassword(password, salt, cost);
       return new Response(JSON.stringify(key));
     }
-    case "/decrypt": {
-      const { text, authKey, encryptionKey } = await request.json();
-      return decryptString(text, authKey, encryptionKey);
+    case "/decrypt-item": {
+      const {
+        content,
+        encItemKey,
+        authKey,
+        encryptionKey
+      } = await request.json();
+      const { itemAuthKey, itemEncryptionKey } = splitItemKey(
+        await decryptString(encItemKey, authKey, encryptionKey)
+      );
+      return new Response(
+        await decryptString(content, itemAuthKey, itemEncryptionKey)
+      );
+    }
+    case "/encrypt-item": {
+      const { data, uuid, authKey, encryptionKey } = await request.json();
+      const bits = await getBits();
+      const { itemAuthKey, itemEncryptionKey } = splitItemKey(bits);
+      const encryptedContent = await encryptString(
+        JSON.stringify(data),
+        uuid,
+        itemAuthKey,
+        itemEncryptionKey
+      );
+      const encItemKey = await encryptString(
+        bits,
+        uuid,
+        authKey,
+        encryptionKey
+      );
+      return new Response(JSON.stringify({ encryptedContent, encItemKey }));
     }
     default: {
-      return fetch(request);
+      return new Response(JSON.stringify("bad request!"), { status: 400 });
     }
   }
 };
 
-self.addEventListener("fetch", e =>
-  e.respondWith(
+self.addEventListener(
+  "fetch",
+  e =>
     e.request.url.startsWith(self.location.origin + "/crypto") &&
     e.request.method === "POST"
-      ? handlers(e.request)
-      : fetch(e.request)
-  )
+      ? e.respondWith(handlers(e.request))
+      : e
 );

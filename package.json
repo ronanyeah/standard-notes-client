@@ -6,8 +6,7 @@
   "dependencies": {
     "copy-webpack-plugin": "^4.5.0",
     "elm-hot-loader": "^0.5.4",
-    "elm-webpack-loader":
-      "git://github.com/elm-community/elm-webpack-loader.git#7d1c6d939ea5b8b8a8f2aa2eb497e7fba49e6c71",
+    "elm-webpack-loader": "^4.5.0",
     "webpack": "^4.1.0",
     "webpack-cli": "^2.0.10",
     "webpack-dev-server": "^3.1.0"

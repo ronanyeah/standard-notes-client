@@ -1,6 +1,10 @@
 port module Ports exposing (..)
 
-import Json.Decode exposing (Value)
+
+port log : String -> Cmd msg
 
 
 port saveAuth : String -> Cmd msg
+
+
+port clearAuth : () -> Cmd msg
